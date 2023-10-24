@@ -10,7 +10,7 @@ from pyicloud.exceptions import PyiCloudFailedLoginException, PyiCloudException
 pause = False
 
 def setup_logging(directory_path):
-    log_file_path = os.path.join(directory_path, 'download_log.log')
+    log_file_path = os.path.join(directory_path, 'ICloudDownloadService.log')
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] %(levelname)s: %(message)s",
@@ -40,17 +40,18 @@ def toggle_pause(e):
 def authenticate_icloud(email, password, logger):
     api = PyiCloudService(email, password)
     if api.requires_2fa:
-        logger.warning("Zweifaktor-Authentifizierung erforderlich. Ein Code wurde an deine Geräte gesendet.")
+        print("Zweifaktor-Authentifizierung erforderlich - Ein Code wurde an Ihr Geräte gesendet.")
         code = input("Bitte gib den Verifizierungscode ein: ")
         result = api.validate_2fa_code(code)
         if not result:
-            logger.error("Ungültiger Verifizierungscode.")
+            print("Der eingegebene Verifizierungscode ist ungültig.")
+            logger.error("Invalid verification code.")
             exit(1)
     return api
 
 def download_assets(api, photos_path, videos_path, file_type, logger):
     assets = api.photos.all
-    logger.info(f"{len(assets)} Dateien gefunden.")
+    logger.info(f"Retrieved {len(assets)} files.")
     
     for i, asset in enumerate(tqdm(assets, desc="Dateien werden heruntergeladen...")):
         while pause:
@@ -70,7 +71,7 @@ def download_assets(api, photos_path, videos_path, file_type, logger):
             file_path = os.path.join(subfolder, asset.filename)
 
             if os.path.exists(file_path):
-                logger.info(f"Datei {asset.filename} existiert bereits - Überspringe Download.")
+                logger.info(f"File {asset.filename} already exists - skipping download.")
                 continue
 
             chunk_size = 1024 * 1024
@@ -82,19 +83,19 @@ def download_assets(api, photos_path, videos_path, file_type, logger):
                         time.sleep(1)
                     f.write(chunk)
 
-            logger.info(f"Datei {i + 1} von {len(assets)} heruntergeladen und gespeichert als {file_path}")
+            logger.info(f"File {i + 1} of {len(assets)} downloaded and saved as {file_path}")
 
         except Exception as e:
-            logger.error(f"Ein Fehler ist beim Herunterladen der Datei {asset.filename} aufgetreten: {e}")
+            logger.error(f"An error occurred while downloading the file {asset.filename}: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":
     print("ICloud-Backup-Service")
     print("Drücke \"P\" um die Anwendung zu pausieren.")
     
-    email = input("Bitte gib deine iCloud E-Mail-Adresse ein: ")
-    password = getpass.getpass("Bitte gib dein iCloud Passwort ein: ")
-    directory_path = input("Bitte gib den Verzeichnispfad an, wo die Dateien gespeichert werden sollen: ")
+    email = input("Bitte gib die iCloud E-Mail-Adresse ein: ")
+    password = getpass.getpass("Bitte gib das iCloud Passwort ein: ")
+    directory_path = input("Bitte gib den Verzeichnispfad ein, an dem die Dateien gespeichert werden sollen: ")
     
     logger = setup_logging(directory_path)
     photos_path, videos_path = setup_directories(directory_path)
@@ -102,15 +103,14 @@ if __name__ == "__main__":
 
     try:
         api = authenticate_icloud(email, password, logger)
-        file_type = input("Möchtest du Fotos oder Videos herunterladen? (f/v/beide): ").lower()
+        file_type = input("Sollen Fotos oder Videos herunterladen werden? (f/v/beide): ").lower()
         download_assets(api, photos_path, videos_path, file_type, logger)
         
     except PyiCloudFailedLoginException:
-        print("Fehler bei der Anmeldung - Überprüfe Benutzername und Passwort.")
-        logger.error("Fehler bei der Anmeldung - Überprüfe Benutzername und Passwort.")
-    except PyiCloudException:
+        print("Fehler bei der Anmeldung - Bitte Benutzernamen und Passwort überprüfen.")
+    except PyiCloudException as e:
         print("Ein Problem mit der iCloud-Authentifizierung ist aufgetreten.")
-        logger.error("Ein Problem mit der iCloud-Authentifizierung ist aufgetreten.")
+        logger.error(f"A problem occurred with iCloud authentication: {e}")
     except Exception as e:
         print(f"Ein unerwarteter Fehler ist aufgetreten - die Anwendung wird beendet...")
-        logger.error(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
+        logger.fatal(f"An unexpected error occured: {e}")
